@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Трекер подписок</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+        }
+        .card-urgent {
+            border: 1px solid #ef4444 !important;
+            background: linear-gradient(to right, #1e293b, #450a0a);
+        }
+        /* Полупрозрачная подложка модального окна */
+        .modal-bg {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+        }
+        .category-badge {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 99px;
+            background: #334155;
+            color: #cbd5e1;
+        }
+        .filter-btn.active {
+            background-color: #2563eb;
+            border-color: #3b82f6;
+            color: white;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            display: flex;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+        }
+        .no-scrollbar > div {
+            display: flex;
+            gap: 0.5rem;
+            min-width: max-content;
+            padding-right: 2rem;
+        }
+        .filter-btn {
+            scroll-snap-align: start;
+            flex-shrink: 0;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+        input[type="date"] {
+            color-scheme: dark;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-24">
+    <div class="max-w-md mx-auto px-4 py-8">
+        <!-- Header / Stats -->
+        <header class="mb-8">
+            <h1 class="text-2xl font-bold mb-6 text-center">Мои подписки</h1>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="card p-4 rounded-2xl shadow-lg">
+                    <p class="text-slate-400 text-sm mb-1">В месяц</p>
+                    <p id="monthly-total" class="text-xl font-bold text-blue-400">0 ₽</p>
+                </div>
+                <div class="card p-4 rounded-2xl shadow-lg">
+                    <p class="text-slate-400 text-sm mb-1">В год</p>
+                    <p id="yearly-total" class="text-xl font-bold text-indigo-400">0 ₽</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Filters -->
+        <div class="mb-6 relative group">
+            <button onclick="scrollFilters(-100)" class="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-slate-900/80 p-1 rounded-full text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+            </button>
+
+            <div class="no-scrollbar" id="category-filters-container" onwheel="handleWheel(event)">
+                <div class="flex gap-2">
+                    <button onclick="setFilter('Все')" class="filter-btn active px-5 py-2.5 rounded-full bg-slate-800 border border-slate-700 text-sm whitespace-nowrap transition-all">Все</button>
+                    <button onclick="setFilter('Развлечения')" class="filter-btn px-5 py-2.5 rounded-full bg-slate-800 border border-slate-700 text-sm whitespace-nowrap transition-all">Развлечения</button>
+                    <button onclick="setFilter('Музыка')" class="filter-btn px-5 py-2.5 rounded-full bg-slate-800 border border-slate-700 text-sm whitespace-nowrap transition-all">Музыка</button>
+                    <button onclick="setFilter('Здоровье')" class="filter-btn px-5 py-2.5 rounded-full bg-slate-800 border border-slate-700 text-sm whitespace-nowrap transition-all">Здоровье</button>
+                    <button onclick="setFilter('Работа')" class="filter-btn px-5 py-2.5 rounded-full bg-slate-800 border border-slate-700 text-sm whitespace-nowrap transition-all">Работа</button>
+                    <button onclick="setFilter('Образование')" class="filter-btn px-5 py-2.5 rounded-full bg-slate-800 border border-slate-700 text-sm whitespace-nowrap transition-all">Образование</button>
+                </div>
+            </div>
+
+            <button onclick="scrollFilters(100)" class="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-slate-900/80 p-1 rounded-full text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- List -->
+        <div id="status-message" class="hidden card p-4 rounded-2xl text-sm text-slate-300 mb-4"></div>
+        <div id="subs-list" class="space-y-4"></div>
+
+        <!-- Add Button -->
+        <button onclick="openModal()" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-full shadow-2xl transition-all active:scale-95 flex items-center gap-2">
+            <i data-lucide="plus" class="w-5 h-5"></i>
+            <span class="font-semibold">Добавить подписку</span>
+        </button>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="fixed inset-0 modal-bg hidden flex items-center justify-center z-50 p-4">
+        <div class="card w-full max-w-sm rounded-3xl p-6 shadow-2xl">
+            <h2 id="modal-title" class="text-xl font-bold mb-6">Добавить подписку</h2>
+            <form id="sub-form" onsubmit="saveSub(event)">
+                <input type="hidden" id="sub-id">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">Название сервиса</label>
+                        <input type="text" id="name" required placeholder="Напр. Netflix" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">Стоимость (₽)</label>
+                        <input type="number" id="price" required placeholder="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">Период оплаты</label>
+                        <select id="period" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="month">В месяц</option>
+                            <option value="year">В год</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">Категория</label>
+                        <select id="category" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="Развлечения">Развлечения</option>
+                            <option value="Музыка">Музыка</option>
+                            <option value="Здоровье">Здоровье</option>
+                            <option value="Работа">Работа</option>
+                            <option value="Образование">Образование</option>
+                            <option value="Другое">Другое</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">Следующее списание</label>
+                        <input type="date" id="next_date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-8">
+                    <button type="button" onclick="closeModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-xl font-medium transition-colors">Отмена</button>
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-medium transition-colors">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Логика вынесена в отдельный файл -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
